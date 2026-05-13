@@ -235,6 +235,15 @@ def geometric_mapping(score_json, filter_repeats=True):
     for part in score_json:
         for measure in part.get("measures", []):
             for ev in measure.get("notes", []):
+
+                #---ignorar los silencios---
+                if ev.get("type") == "rest": 
+                    continue
+
+                #---filtro---
+                if ev.get("note") != "D":
+                    continue
+
                 # get y coordinate
                 sp = ev.get("staff_position")
                 if isinstance(sp, list):
@@ -265,7 +274,13 @@ def plot_points(points, outpath):
     xs = [p["x"] for p in points]
     ys = [p["y"] for p in points]
     plt.figure(figsize=(10, 4))
+
+    #---con linea---
     plt.plot(xs, ys, marker="o", linestyle="-", color="k")
+
+    #---sin linea---
+    #plt.plot(xs, ys, marker="o", linestyle="", color="k", markersize=4, alpha=0.6)
+
     plt.xlabel("Index (x)")
     plt.ylabel("Staff distance to clef reference (y)")
     plt.grid(alpha=0.3)
@@ -319,6 +334,35 @@ def analyze(json_path, out_json=None, plot_path=None, crab=False):
         if out_json:
             with open(out_json, "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
+
+    # Bloque para visualizar el Brauer Quiver
+    if plot_path: 
+        import networkx as nx
+        G = nx.DiGraph()
+        for v, succs in successors.items():
+            for s in succs:
+                # Simplificamos los nombres para el gráfico
+                # Manejamos si v es una nota simple o un acorde (tupla de tuplas)
+                def get_label(vertex):
+                    if isinstance(vertex[0], tuple): # Es un acorde
+                        return "Chord"
+                    note = str(vertex[0])
+                    alt = "#" if vertex[1] > 0 else ("b" if vertex[1] < 0 else "")
+                    return f"{note}{alt}"
+
+                G.add_edge(get_label(v), get_label(s))
+        
+        plt.figure(figsize=(10, 10))
+        pos = nx.spring_layout(G, k=0.5) # k ajusta la distancia entre nodos
+        nx.draw(G, pos, with_labels=True, node_color='lavender', 
+                edge_color='steelblue', node_size=1500, font_size=8, 
+                arrows=True, arrowsize=15)
+        plt.title("Brauer Quiver (Q_M)")
+        
+        # AQUÍ ESTÁ EL CAMBIO: Usamos plot_path en lugar de un nombre fijo
+        quiver_path = plot_path.replace(".png", "_quiver.png")
+        plt.savefig(quiver_path, dpi=300, bbox_inches='tight')
+        print(f"¡Grafo del Quiver guardado en: {quiver_path}!")
 
     return result
 
