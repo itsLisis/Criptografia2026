@@ -11,48 +11,40 @@ def load_score(path):
         return json.load(f)
 
 
-def build_points(score, filter_repeats=True, per_part=True):
-    # Expect score to be a list of parts as produced by parse_score.py
+def build_points(score, filter_repeats=True):
     points = []
+    
     for part in score:
-        part_id = part.get('part', None)
-        seq = 0
+        part_id = part.get('part', "Unknown")
+        current_x = 0 
+        last_positions = None 
+
         for measure in part.get('measures', []):
             for ev in measure.get('notes', []):
-                seq += 1
-                # Skip rests (no staff_position)
                 sp = ev.get('staff_position', None)
+                
                 if sp is None:
-                    continue
+                    last_positions = None 
+                    continue 
+                
+                current_positions = sp if isinstance(sp, list) else [sp]
+                current_positions = sorted({round(float(s), 4) for s in current_positions})
+
+                if filter_repeats and current_positions == last_positions:
+                    continue 
+                
+                current_x += 1
+                last_positions = current_positions
+                
                 dur = ev.get('duration', 0.0)
-                # If staff_position is a list (chord), expand into multiple points
-                if isinstance(sp, list):
-                    for s in sp:
-                        points.append({
-                            'part': part_id,
-                            'x': seq,
-                            'y': s,
-                            'duration': dur
-                        })
-                else:
+                for s in current_positions:
                     points.append({
                         'part': part_id,
-                        'x': seq,
-                        'y': sp,
+                        'x': current_x,
+                        'y': s,
                         'duration': dur
                     })
-
-    if filter_repeats:
-        # remove consecutive duplicates (same y and duration)
-        filtered = []
-        prev = None
-        for p in points:
-            key = (p['y'], round(p['duration'], 6))
-            if prev is None or key != prev:
-                filtered.append(p)
-                prev = key
-        points = filtered
-
+                    
     return points
 
 

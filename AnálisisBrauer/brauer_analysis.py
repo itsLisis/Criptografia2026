@@ -241,8 +241,8 @@ def geometric_mapping(score_json, filter_repeats=True):
                     continue
 
                 #---filtro---
-                if ev.get("note") != "D":
-                    continue
+                #if ev.get("note") != "D":
+                #    continue
 
                 # get y coordinate
                 sp = ev.get("staff_position")
@@ -335,34 +335,56 @@ def analyze(json_path, out_json=None, plot_path=None, crab=False):
             with open(out_json, "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=2, ensure_ascii=False)
 
-    # Bloque para visualizar el Brauer Quiver
+    # Bloque para visualizar el Brauer Quiver (LIMPIO)
     if plot_path: 
         import networkx as nx
         G = nx.DiGraph()
-        for v, succs in successors.items():
-            for s in succs:
-                # Simplificamos los nombres para el gráfico
-                # Manejamos si v es una nota simple o un acorde (tupla de tuplas)
-                def get_label(vertex):
-                    if isinstance(vertex[0], tuple): # Es un acorde
-                        return "Chord"
-                    note = str(vertex[0])
-                    alt = "#" if vertex[1] > 0 else ("b" if vertex[1] < 0 else "")
-                    return f"{note}{alt}"
+        
+        # Definimos la función de etiquetas fuera de los bucles por eficiencia
+        def get_label(vertex):
+            if not isinstance(vertex, (list, tuple)): return str(vertex)
+            if isinstance(vertex[0], tuple): return "Chord"
+            note = str(vertex[0])
+            alt = "#" if vertex[1] > 0 else ("b" if vertex[1] < 0 else "")
+            return f"{note}{alt}"
 
-                G.add_edge(get_label(v), get_label(s))
+        for v, succs in successors.items():
+            u_label = get_label(v)
+            for s in succs:
+                v_label = get_label(s)
+                
+                # --- AQUÍ ESTÁ EL TRUCO PARA QUITAR BUCLES ---
+                if u_label == v_label:
+                    continue  # Si la nota va a sí misma, se ignora
+                # ---------------------------------------------
+
+                G.add_edge(u_label, v_label)
         
-        plt.figure(figsize=(10, 10))
-        pos = nx.spring_layout(G, k=0.5) # k ajusta la distancia entre nodos
-        nx.draw(G, pos, with_labels=True, node_color='lavender', 
-                edge_color='steelblue', node_size=1500, font_size=8, 
-                arrows=True, arrowsize=15)
-        plt.title("Brauer Quiver (Q_M)")
+        # Limpieza extra por seguridad (elimina cualquier loop residual)
+        G.remove_edges_from(nx.selfloop_edges(G))
+
+        plt.figure(figsize=(12, 12))
         
-        # AQUÍ ESTÁ EL CAMBIO: Usamos plot_path en lugar de un nombre fijo
+        # Layout circular: resalta la estructura cíclica de Bach
+        pos = nx.circular_layout(G) 
+        
+        nx.draw(G, pos, 
+                with_labels=True, 
+                node_color='lavender', 
+                edge_color='steelblue', 
+                node_size=2500, 
+                font_size=10, 
+                font_weight='bold',
+                arrows=True, 
+                arrowsize=20,
+                connectionstyle='arc3, rad = 0.1') # Flechas curvas para que no se encimen
+
+        plt.title("Brauer Quiver (Q_M) - Sin Bucles")
+        
         quiver_path = plot_path.replace(".png", "_quiver.png")
         plt.savefig(quiver_path, dpi=300, bbox_inches='tight')
-        print(f"¡Grafo del Quiver guardado en: {quiver_path}!")
+        plt.close()
+        print(f"¡Grafo limpio guardado en: {quiver_path}!")
 
     return result
 
